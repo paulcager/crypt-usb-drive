@@ -1,0 +1,55 @@
+#!/bin/bash 
+
+set -e -o pipefail
+
+dd() {
+	/usr/bin/dd 2>/dev/null "$@"
+}
+
+BLOCKS=68
+
+# Create keyfile with conspicuous placeholders.
+(dd if=/dev/zero bs=128 count=1 | tr '\000' 'X'; dd if=/dev/zero bs=128 count=1 | tr '\000' 'Y') >key.txt
+
+# The minimum FAT12 filesystem size if 68 blocks.
+dd if=/dev/zero of=fatfs bs=512 count=${BLOCKS}
+mkfs.vfat -n KEYDISK -S 512 -f 1 -r 16 -m /dev/null fatfs >/dev/null 2>&1
+
+mkdir -p fat
+sudo umount "${PWD}"/fat 2>/dev/null || true
+sudo mount "${PWD}"/fatfs "${PWD}"/fat
+sudo cp key.txt fat/
+sudo /usr/bin/dd if=/dev/random count=1 bs=256 of=fat/rand.bin 2>/dev/null
+sudo umount "${PWD}"/fat
+rmdir fat
+
+echo "#include <stdio.h>"
+echo
+
+LAST=0
+for ((i=0; i < BLOCKS; i++))
+do
+	NON_ZERO=$(dd if=fatfs bs=512 skip=$i count=1 | tr -d '\000' | wc -c)
+	if [ "$NON_ZERO" -ne 0 ]
+	then
+		printf "u_int8_t block%d[512] = {\n" $i
+		dd if=fatfs bs=512 skip=$i count=1 | xxd -i
+		echo "};"
+		echo
+
+		LAST=$i
+	fi
+done
+
+echo "uint8_t* disk[34] = {"
+for ((i=0; i <= LAST; i++)) {
+	NON_ZERO=$(dd if=fatfs bs=512 skip=$i count=1 | tr -d '\000' | wc -c)
+	if [ "$NON_ZERO" -ne 0 ]
+	then
+	  printf "  block%d,\n" $i
+    else
+	  printf "  NULL,\n"
+    fi
+}
+echo "};"
+echo
