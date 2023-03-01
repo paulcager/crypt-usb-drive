@@ -10,7 +10,7 @@ dd() {
 BLOCKS=68
 
 # Create blank 128-byte keyfile.
-dd if=/dev/zero bs=128 count=1 >key.txt
+dd if=/dev/zero bs=128 count=1 >key
 
 # The minimum FAT12 filesystem size if 68 blocks.
 dd if=/dev/zero of=fatfs bs=512 count=${BLOCKS}
@@ -19,7 +19,7 @@ mkfs.fat -n KEYDISK -S 512 -f 1 -r 16 -m /dev/null fatfs >/dev/null 2>&1
 mkdir -p fat
 sudo umount "${PWD}"/fat 2>/dev/null || true
 sudo mount "${PWD}"/fatfs "${PWD}"/fat
-sudo cp key.txt fat/
+sudo cp key fat/
 #sudo /usr/bin/dd if=/dev/random count=1 bs=256 of=fat/rand.bin 2>/dev/null
 sudo umount "${PWD}"/fat
 rmdir fat
@@ -38,7 +38,7 @@ cat >src/image.h <<'EOF'
 #define DISK_HEADER_BLOCKS 3
 extern uint8_t disk_blocks[DISK_HEADER_BLOCKS][BLOCK_SIZE];
 
-// key.txt's data will be stored in block 7.
+// key's data will be stored in block 7.
 #define FILE_CONTENTS_BLOCK 7
 // Load the key file starting at offset FILE_CONTENTS_BLOCK_OFFSET. The
 // initial portion of the file will be generated.

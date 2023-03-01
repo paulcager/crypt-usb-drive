@@ -11,7 +11,10 @@
 #define DISK_HEADER_BLOCKS 3
 extern uint8_t disk_blocks[DISK_HEADER_BLOCKS][BLOCK_SIZE];
 
-// key.txt's data will be stored in block 7.
+// key's data will be stored in block 7.
 #define FILE_CONTENTS_BLOCK 7
+// Load the key file starting at offset FILE_CONTENTS_BLOCK_OFFSET. The
+// initial portion of the file will be generated.
+#define FILE_CONTENTS_BLOCK_OFFSET (4+FILE_PREFIX_LEN)
 
 extern uint8_t file_contents[BLOCK_SIZE];

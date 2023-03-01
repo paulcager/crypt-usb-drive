@@ -2,5 +2,5 @@
 /build
 /cmake-build-debug/
 /fatfs
-/key.txt
+/key
 /src/secrets.h

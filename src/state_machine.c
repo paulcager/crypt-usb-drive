@@ -5,6 +5,7 @@
 
 #include "state_machine.h"
 #include "image.h"
+#include "debug.h"
 #include "secrets.h"
 
 #pragma GCC diagnostic ignored "-Wswitch"
@@ -18,6 +19,8 @@ uint32_t lastSuccessfulFetch;
 void got_fetch_key_reply(const struct pbuf *buf) {
     uint8_t buff[PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 6];
 
+    DEBUG_LOG("got_fetch_key_reply(state=%d, len=%d)", state, buf->tot_len);
+
     switch (state) {
         case FETCHING_KEY:
         case REFRESHING_KEY:
@@ -28,6 +31,7 @@ void got_fetch_key_reply(const struct pbuf *buf) {
             int offset = sizeof(buff) + FILE_PREFIX_LEN;
             pbuf_copy_partial(buf, file_contents + offset, BLOCK_SIZE - offset, 0);
             state = READY;
+            lastSuccessfulFetch = board_millis();
             break;
 
         default:
@@ -78,40 +82,45 @@ void handle_state() {
             if (board_millis() >= lastSuccessfulFetch + REFRESH_INTERVAL) {
                 state = REFRESHING_KEY;
                 fetchKey();
-                return;
             }
 
-        case REFRESHING_KEY:
-        case DEAD:
-            // No action
             return;
     }
 }
 
+static struct pbuf * http_body;
+
 void http_result(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res, err_t err) {
-    printf("transfer complete, httpc_result=%d, HTTP result=%d\n", httpc_result, (int) srv_res);
+    DEBUG_LOG("transfer complete, httpc_result=%d, HTTP result=%d, content-len=%d", httpc_result, (int) srv_res, (int)rx_content_len);
 
     switch (state) {
         case FETCHING_KEY:
         case REFRESHING_KEY:
             if (httpc_result != HTTPC_RESULT_OK ||
                 rx_content_len == 0 ||
-                srv_res != 200) {
+                srv_res != 200 ||
+                http_body == NULL) {
+                DEBUG_LOG("Set state to DEAD(%d)", DEAD);
                 state = DEAD;
+                return;
             }
 
+            got_fetch_key_reply(http_body);
             return;
     }
+
+    pbuf_free(http_body);
+    http_body = NULL;
 }
 
+
+
 err_t body(void *arg, struct tcp_pcb *conn, struct pbuf *p, err_t err) {
-    printf("body: %d, len=%d\n", err, p->tot_len);
+    DEBUG_LOG("body: err=%d, len=%d", err, p->tot_len);
+    if (http_body != NULL)
+        pbuf_free(http_body);
 
-    if (state != DEAD) {
-        got_fetch_key_reply(p);
-    }
-
-    pbuf_free(p);
+    http_body = p;
 
     return ERR_OK;
 }
@@ -130,7 +139,8 @@ void fetchKey() {
             NULL
     );
 
-    printf("httpc_get_file_dns: %d\n", err);
+    DEBUG_LOG("httpc_get_file_dns: %d", err);
+
     if (err) {
         state = DEAD;
     }

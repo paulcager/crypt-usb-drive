@@ -14,7 +14,7 @@ add_executable(cryptusbdrive
 		src/disk_io.c
 		src/main.c
 		src/usb_descriptors.c
-		src/lwipopts.h src/secrets.h src/state_machine.c src/state_machine.h src/secrets.c)
+		src/lwipopts.h src/secrets.h src/state_machine.c src/state_machine.h src/secrets.c src/debug.c src/debug.h)
 
 target_include_directories(cryptusbdrive PRIVATE
         include/

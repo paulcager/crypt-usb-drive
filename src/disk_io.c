@@ -3,6 +3,8 @@
 #include "image.h"
 #include "bsp/board.h"
 #include "tusb.h"
+#include "state_machine.h"
+#include "debug.h"
 
 extern uint32_t start_time;
 
@@ -53,7 +55,7 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 {
     (void) lun;
 
-    const char vid[] = "TinyUSB";
+    const char vid[] = "cager";
     const char pid[] = "Mass Storage";
     const char rev[] = "1.0";
 
@@ -66,8 +68,7 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 // return true allowing host to read/write this LUN e.g SD card inserted
 bool tud_msc_test_unit_ready_cb(uint8_t lun)
 {
-    return true;
-    // return board_millis() < start_time + 30000;
+    return state == READY || state == REFRESHING_KEY;
 }
 
 // Invoked when received SCSI_CMD_READ_CAPACITY_10 and SCSI_CMD_READ_FORMAT_CAPACITY to determine the disk size
@@ -85,8 +86,7 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_siz
 // - Start = 1 : active mode, if load_eject = 1 : load disk storage
 bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject)
 {
-    (void) lun;
-    (void) power_condition;
+    DEBUG_LOG("tud_msc_start_stop_cb: power=%d, start=%d, load=%d", (int)power_condition, (int)start, (int)load_eject);
 
     if ( load_eject )
     {
