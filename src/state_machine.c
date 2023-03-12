@@ -16,15 +16,28 @@ enum states state;
 
 uint32_t lastSuccessfulFetch;
 
+char *state_name(enum states state) {
+    switch (state) {
+        case STARTING: return "STARTING";
+        case CONNECTING: return "CONNECTING";
+        case FETCHING_KEY: return "FETCHING_KEY";
+        case READY: return "READY";
+        case REFRESHING_KEY: return "REFRESHING_KEY";
+        case EJECTED: return "EJECTED";
+        case DEAD: return "DEAD";
+        default: return "unknown";
+    };
+}
+
 void got_fetch_key_reply(const struct pbuf *buf) {
     uint8_t buff[PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 6];
 
-    DEBUG_LOG("got_fetch_key_reply(state=%d, len=%d)", state, buf->tot_len);
+    DEBUG_LOG("got_fetch_key_reply(state=%s, len=%d)", state_name(state), buf->tot_len);
 
     switch (state) {
         case FETCHING_KEY:
         case REFRESHING_KEY:
-            pico_get_unique_board_id((pico_unique_board_id_t *)buff);
+            pico_get_unique_board_id((pico_unique_board_id_t *) buff);
             cyw43_hal_get_mac(0, buff + PICO_UNIQUE_BOARD_ID_SIZE_BYTES);
             memcpy(file_contents, buff, sizeof(buff));
             memcpy(file_contents + sizeof(buff), key_file_prefix, FILE_PREFIX_LEN);
@@ -85,13 +98,18 @@ void handle_state() {
             }
 
             return;
+
+        case EJECTED:
+            // No action necessary.
+            return;
     }
 }
 
-static struct pbuf * http_body;
+
+static struct pbuf *http_body;
 
 void http_result(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res, err_t err) {
-    DEBUG_LOG("transfer complete, httpc_result=%d, HTTP result=%d, content-len=%d", httpc_result, (int) srv_res, (int)rx_content_len);
+    DEBUG_LOG("transfer complete, httpc_result=%d, HTTP result=%d, content-len=%d", httpc_result, (int) srv_res, (int) rx_content_len);
 
     switch (state) {
         case FETCHING_KEY:
@@ -112,7 +130,6 @@ void http_result(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u
     pbuf_free(http_body);
     http_body = NULL;
 }
-
 
 
 err_t body(void *arg, struct tcp_pcb *conn, struct pbuf *p, err_t err) {

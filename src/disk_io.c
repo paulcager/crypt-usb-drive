@@ -20,6 +20,10 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
       return -1;
   }
 
+  if (state == EJECTED) {
+      return -1;
+  }
+
   if (lba < DISK_HEADER_BLOCKS) {
       return copy_block(disk_blocks[lba], offset, buffer, bufsize);
   }
@@ -92,10 +96,11 @@ bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, boo
     {
         if (start)
         {
-            // load disk storage
+            // Let state machine notice we are connected, and need to fetch key.
+            state = CONNECTING;
         }else
         {
-            // unload disk storage
+            state = EJECTED;
         }
     }
 
@@ -124,6 +129,8 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
 int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, uint16_t bufsize)
 {
     // read10 & write10 has their own callback and MUST not be handled here
+
+    DEBUG_LOG("tud_msc_scsi_cb: %d", (int)scsi_cmd[0]);
 
     void const* response = NULL;
     int32_t resplen = 0;

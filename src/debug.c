@@ -14,7 +14,7 @@ void __debug_log(const char *fmt, ...) {
         udp_pcb = udp_new();
         ip4_addr_t  debug_address;
         ip4addr_aton(DEBUG_HOST, &debug_address);
-        udp_connect(udp_pcb, &debug_address, 2020);
+        udp_connect(udp_pcb, &debug_address, DEBUG_PORT);
     }
 
     va_list args;
