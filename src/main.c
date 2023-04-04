@@ -45,35 +45,6 @@ int main(void) {
     for(;;);    // Wait for watchdog to kill us & restart.
 }
 
-//--------------------------------------------------------------------+
-// Device callbacks
-//--------------------------------------------------------------------+
-
-// Invoked when device is mounted
-void tud_mount_cb(void) {
-    DEBUG_LOG("Mounted %s", state_name(state));
-    if (state == EJECTED) {
-        state = FETCHING_KEY;
-    }
-}
-
-// Invoked when device is unmounted
-void tud_umount_cb(void) {
-    DEBUG_LOG("Unounted", NULL);
-}
-
-// Invoked when usb bus is suspended
-// remote_wakeup_en : if host allow us  to perform remote wakeup
-// Within 7ms, device must draw an average of current less than 2.5 mA from bus
-void tud_suspend_cb(bool remote_wakeup_en) {
-    DEBUG_LOG("tud_suspend_cb(%d)", (int)remote_wakeup_en);
-}
-
-// Invoked when usb bus is resumed
-void tud_resume_cb(void) {
-    DEBUG_LOG("tud_resume_cb", NULL);
-}
-
 uint32_t start_time;
 
 void main_loop() {
@@ -94,20 +65,21 @@ void main_loop() {
         if (state == READY || state == REFRESHING_KEY) {
             // init device stack on configured roothub port
             tud_init(BOARD_TUD_RHPORT);
+            //tud_msc_set_sense(0, SCSI_SENSE_NONE, 0x00, 0x00);
 
             if (!ready) {
                 cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
-                //tud_connect();
                 ready = true;
             }
         } else {
+            if (state == EJECTED) {
+                tud_msc_set_sense(0, SCSI_SENSE_NOT_READY, 0x3a, 0x00);
+            }
+
             //DEBUG_LOG("state: %s (tud_connected=%d)", state_name(state), (int)tud_connected());
             if (ready) {
                 DEBUG_LOG("Setting disconnected: %s (tud_connected=%d)", state_name(state), (int)tud_connected());
                 cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
-//                if (tud_connected()) {
-//                    tud_disconnect();
-//                }
                 ready = false;
                 DEBUG_LOG("Disconnected done (tud_connected=%d)", (int)tud_connected());
             }

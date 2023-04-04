@@ -8,7 +8,7 @@
 
 extern uint32_t start_time;
 
-int32_t copy_block(uint8_t* block, uint32_t offset, void* buffer, uint32_t bufsize);
+int32_t copy_block(const int lba, const uint8_t* block, uint32_t offset, void* buffer, uint32_t bufsize);
 
 
 
@@ -24,28 +24,47 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
       return -1;
   }
 
-  if (lba < DISK_HEADER_BLOCKS) {
-      return copy_block(disk_blocks[lba], offset, buffer, bufsize);
-  }
-
-  if (lba == FILE_CONTENTS_BLOCK) {
-      return copy_block(file_contents, offset, buffer, bufsize);
-  }
-
-  memset(buffer, 0, bufsize);
-
-  return (int32_t)bufsize;
+  return copy_block(lba, disk_blocks[lba], offset, buffer, bufsize);
 }
 
-int32_t copy_block(uint8_t* block, uint32_t offset, void* buffer, uint32_t bufsize) {
+int32_t copy_block(const int lba, const uint8_t* block, uint32_t offset, void* buffer, uint32_t bufsize) {
     if (offset + bufsize > BLOCK_SIZE) {
         bufsize = BLOCK_SIZE - offset;
     }
 
     memcpy(buffer, block + offset, bufsize);
-
     return (int32_t)bufsize;
 }
+
+//--------------------------------------------------------------------+
+// Device callbacks
+//--------------------------------------------------------------------+
+
+// Invoked when device is mounted
+void tud_mount_cb(void) {
+    DEBUG_LOG("Mounted %s", state_name(state));
+    if (state == EJECTED) {
+        state = CONNECTING;
+    }
+}
+
+// Invoked when device is unmounted
+void tud_umount_cb(void) {
+    DEBUG_LOG("Unounted", NULL);
+}
+
+// Invoked when usb bus is suspended
+// remote_wakeup_en : if host allow us  to perform remote wakeup
+// Within 7ms, device must draw an average of current less than 2.5 mA from bus
+void tud_suspend_cb(bool remote_wakeup_en) {
+    DEBUG_LOG("tud_suspend_cb(%d)", (int)remote_wakeup_en);
+}
+
+// Invoked when usb bus is resumed
+void tud_resume_cb(void) {
+    DEBUG_LOG("tud_resume_cb", NULL);
+}
+
 
 // Invoked to determine max LUN
 uint8_t tud_msc_get_maxlun_cb(void)
@@ -92,14 +111,11 @@ bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, boo
 {
     DEBUG_LOG("tud_msc_start_stop_cb: power=%d, start=%d, load=%d", (int)power_condition, (int)start, (int)load_eject);
 
-    if ( load_eject )
-    {
-        if (start)
-        {
+    if ( load_eject ) {
+        if (start) {
             // Let state machine notice we are connected, and need to fetch key.
             state = CONNECTING;
-        }else
-        {
+        } else {
             state = EJECTED;
         }
     }
@@ -130,7 +146,7 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
 {
     // read10 & write10 has their own callback and MUST not be handled here
 
-    DEBUG_LOG("tud_msc_scsi_cb: %d", (int)scsi_cmd[0]);
+    DEBUG_LOG("tud_msc_scsi_cb: %d [%d] - state=%s", (int)scsi_cmd[0], (int)scsi_cmd[4], state_name(state));
 
     void const* response = NULL;
     int32_t resplen = 0;
@@ -140,6 +156,17 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
 
     switch (scsi_cmd[0])
     {
+        case SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL:
+            resplen = 0;
+//            if ((scsi_cmd[4] & 0x03) == 0) {
+//                tud_msc_set_sense(0, SCSI_SENSE_NOT_READY, 0x3a, 0x00);
+//                state = EJECTED;
+//            } else if (state == EJECTED) {
+//                state = CONNECTING;
+//            }
+
+            break;
+
         default:
             // Set Sense = Invalid Command Operation
             tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x20, 0x00);
